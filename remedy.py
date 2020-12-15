@@ -22,7 +22,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 ---
 module: remedy
-short_description: Create Work Order with context = ssl._create_unverified_context()Remedy REST API
+short_description: Create Work Order with Remedy REST API
 
 # If this is part of a collection, you need to use semantic versioning,
 # i.e. the version is of the form "2.5.0" and not "2.4".
@@ -133,7 +133,6 @@ def login(tokendir, apibase, user, password):
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
-context = ssl._create_unverified_context()
 
 def refreshtoken(tokendir, apibase, user, password):
     global CONST_MESSAGE
@@ -157,7 +156,6 @@ def refreshtoken(tokendir, apibase, user, password):
     finally:
         lock.release(force=True)
         os.remove(lockfile)
-context = ssl._create_unverified_context()
 
 def create(tokendir, apibase, data):
     global CONST_MESSAGE
