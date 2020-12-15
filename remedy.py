@@ -1,4 +1,6 @@
 #!/usr/bin/python
+
+# Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import (absolute_import, division, print_function)
 from ansible.module_utils.basic import AnsibleModule
@@ -9,10 +11,7 @@ import os
 from os import path
 from time import sleep
 import http.client
-import chardet
-import mimetypes
-import sys
-import logging
+import ssl
 
 # These two lines enable debugging at httplib level (requests->urllib3->http.client)
 # You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
@@ -23,7 +22,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 ---
 module: remedy
-short_description: Create Work Order with Remedy REST API
+short_description: Create Work Order with context = ssl._create_unverified_context()Remedy REST API
 
 # If this is part of a collection, you need to use semantic versioning,
 # i.e. the version is of the form "2.5.0" and not "2.4".
@@ -134,7 +133,7 @@ def login(tokendir, apibase, user, password):
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
-
+context = ssl._create_unverified_context()
 
 def refreshtoken(tokendir, apibase, user, password):
     global CONST_MESSAGE
@@ -158,7 +157,7 @@ def refreshtoken(tokendir, apibase, user, password):
     finally:
         lock.release(force=True)
         os.remove(lockfile)
-
+context = ssl._create_unverified_context()
 
 def create(tokendir, apibase, data):
     global CONST_MESSAGE
@@ -234,7 +233,7 @@ def addattachment(tokendir, apibase, woid, data, filename):
             return entryidresponse
         entryid = json.loads(entryidresponse.text)["entries"][0]["values"]["Request ID"]
         apibase = apibase.replace('https://', '')
-        conn = http.client.HTTPSConnection(apibase, 443)
+        conn = http.client.HTTPSConnection(apibase, port=443, context=ssl._create_unverified_context())
         tokenfile = CONST_TOKENFILE
         data["values"]["Work Order ID"] = woid
         data["values"]["WorkOrder_EntryID"] = woid
@@ -255,7 +254,6 @@ def addattachment(tokendir, apibase, woid, data, filename):
             dataList.append(b'')
             with open(filename, 'rb') as f:
                 filecontent = f.read()
-                encoding = chardet.detect(filecontent)
                 dataList.append(filecontent)
                 f.close()
             dataList.append(b'--' + boundary + b'--')
