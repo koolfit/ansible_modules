@@ -11,6 +11,7 @@ import os
 from os import path
 from time import sleep
 import http.client
+import ssl
 import chardet
 import mimetypes
 import sys
@@ -240,7 +241,7 @@ def addattachment(tokendir, apibase, woid, data, filename):
             return entryidresponse
         entryid = json.loads(entryidresponse.text)["entries"][0]["values"]["Request ID"]
         apibase = apibase.replace('https://', '')
-        conn = http.client.HTTPSConnection(apibase, 443)
+        conn = http.client.HTTPSConnection(apibase, 443, context=ssl._create_unverified_context())
         tokenfile = CONST_TOKENFILE
         data["values"]["Work Order ID"] = woid
         data["values"]["WorkOrder_EntryID"] = woid
