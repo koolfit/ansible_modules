@@ -11,7 +11,10 @@ import os
 from os import path
 from time import sleep
 import http.client
-import ssl
+import chardet
+import mimetypes
+import sys
+import logging
 
 # These two lines enable debugging at httplib level (requests->urllib3->http.client)
 # You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
@@ -134,6 +137,7 @@ def login(tokendir, apibase, user, password):
         response.status_code = 400
         return response
 
+
 def refreshtoken(tokendir, apibase, user, password):
     global CONST_MESSAGE
     lockfile = tokendir+"/token_refresh_"+user+".lock"
@@ -143,11 +147,15 @@ def refreshtoken(tokendir, apibase, user, password):
     try:
         open(lockfile, 'a+').close()
         lock = filelock.FileLock(lockfile, timeout=3)
-        logout(tokendir, apibase)
+        try:
+          logout(tokendir, apibase)
+        except Exception:
+          pass
         response = login(tokendir, apibase, user, password)
         if response.status_code == 200:
             return True
         else:
+            CONST_MESSAGE += "Authentication Failed"
             return False
     except Exception as e:
         CONST_MESSAGE += str(e)
@@ -156,6 +164,7 @@ def refreshtoken(tokendir, apibase, user, password):
     finally:
         lock.release(force=True)
         os.remove(lockfile)
+
 
 def create(tokendir, apibase, data):
     global CONST_MESSAGE
@@ -231,7 +240,7 @@ def addattachment(tokendir, apibase, woid, data, filename):
             return entryidresponse
         entryid = json.loads(entryidresponse.text)["entries"][0]["values"]["Request ID"]
         apibase = apibase.replace('https://', '')
-        conn = http.client.HTTPSConnection(apibase, port=443, context=ssl._create_unverified_context())
+        conn = http.client.HTTPSConnection(apibase, 443)
         tokenfile = CONST_TOKENFILE
         data["values"]["Work Order ID"] = woid
         data["values"]["WorkOrder_EntryID"] = woid
@@ -252,6 +261,7 @@ def addattachment(tokendir, apibase, woid, data, filename):
             dataList.append(b'')
             with open(filename, 'rb') as f:
                 filecontent = f.read()
+                encoding = chardet.detect(filecontent)
                 dataList.append(filecontent)
                 f.close()
             dataList.append(b'--' + boundary + b'--')
@@ -313,7 +323,10 @@ def run_module():
 
     fname = module.params["token_dir"] + "/token_"+module.params['user']+".txt"
     if not os.path.exists(fname):
-        open(fname, 'a').write("abcdefg").close()
+        with open(fname, 'a') as f:
+            f.write("")
+            f.close()
+        refreshtoken(module.params["token_dir"], module.params["apibase"], module.params["user"], module.params["password"])
     CONST_TOKENFILE = fname
 
 
