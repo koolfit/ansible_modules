@@ -16,6 +16,9 @@ import chardet
 import mimetypes
 import sys
 import logging
+from logging import getLogger, INFO
+from concurrent_log_handler import ConcurrentRotatingFileHandler
+from datetime import datetime
 
 # These two lines enable debugging at httplib level (requests->urllib3->http.client)
 # You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
@@ -87,7 +90,7 @@ message:
 '''
 
 
-# Module constants definition
+# Module constants definitionwrite to syslog
 CONST_NUMRETRIES = 3
 CONST_TOKENFILE=""
 CONST_LOGIN = '/api/jwt/login'
@@ -97,24 +100,40 @@ CONST_CREATEWO = '/WOI:WorkOrderInterface_Create'
 CONST_MODIFY = '/WOI:WorkOrder'
 CONST_ATTACHMENT = '/WOI:WorkInfo'
 CONST_MESSAGE = ""
+LOG = False
+LOG_HANDLER = None
+LOG_ID = None
 
+def log(message):
+  global LOG
+  global LOG_HANDLER
+  global LOG_ID
+  if LOG:
+    try:
+        LOG_HANDLER.info(LOG_ID+": "+str(datetime.now())+": "+message)
+    except Exception as e:
+        pass
 
 def logout(tokendir, apibase):
-    try:
-        tokenfile = CONST_TOKENFILE
-        endpoint = apibase + CONST_LOGOUT
-        with open(tokenfile, 'r') as file:
-            tokendata = file.read().replace('\n', '')
-            file.close()
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata}
-            response = requests.post(endpoint, headers=hdrs)
-            return response
-    except:
-        response.status_code = 400
-        return response
+  try:
+      tokenfile = CONST_TOKENFILE
+      endpoint = apibase + CONST_LOGOUT
+      log("Invalidating old token...")
+      with open(tokenfile, 'r') as file:
+          tokendata = file.read().replace('\n', '')
+          file.close()
+          hdrs = {'Authorization': 'AR-JWT ' + tokendata}
+          response = requests.post(endpoint, headers=hdrs)
+          log("Old token invalidated (status code: "+str(response.status_code)+")")
+          return response
+  except Exception as e:
+      log("ERROR: "+str(e))
+      response.status_code = 400
+      return response
 
 def login(tokendir, apibase, user, password):
     global CONST_MESSAGE
+    log("Logging in (user: '"+user+"', url: '"+apibase+"'")
     try:
         tokenfile = CONST_TOKENFILE
         #q = {'username': user, 'password': password}
@@ -126,14 +145,18 @@ def login(tokendir, apibase, user, password):
         response = requests.request("POST", endpoint, params=q, headers=hdrs, data=data)
         #response = requests.post(endpoint, data=data, headers=hdrs)
         if response.status_code == 200:
+            log("Logged in successfully")
             tokendata = response.text
             with open(tokenfile, 'w+') as file:
+                log("Writing token file...")
                 file.write(tokendata)
                 file.close()
             return response
         else:
+            log("Could not login (status_code: "+str(response.status_code)+")")
             return response
     except Exception as e:
+        log("Login error: "+str(e))
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
@@ -141,11 +164,14 @@ def login(tokendir, apibase, user, password):
 
 def refreshtoken(tokendir, apibase, user, password):
     global CONST_MESSAGE
+    log("Found invalid token. Refreshing...")
     lockfile = tokendir+"/token_refresh_"+user+".lock"
     if path.exists(lockfile):
-        sleep(3)
-        return
+      log("Token file locked. Waiting for lock to release...")
+      sleep(3)
+      return
     try:
+        log("Token file locked. Trying to refresh...")
         open(lockfile, 'a+').close()
         lock = filelock.FileLock(lockfile, timeout=3)
         try:
@@ -156,13 +182,16 @@ def refreshtoken(tokendir, apibase, user, password):
         if response.status_code == 200:
             return True
         else:
+            log("Token refresh error: Authentication failed.")
             CONST_MESSAGE += "Authentication Failed"
             return False
     except Exception as e:
+        log("Token refresh error: "+str(e))
         CONST_MESSAGE += str(e)
         sleep(3)
         return False
     finally:
+        log("Releasing token file lock...")
         lock.release(force=True)
         os.remove(lockfile)
 
@@ -170,6 +199,7 @@ def refreshtoken(tokendir, apibase, user, password):
 def create(tokendir, apibase, data):
     global CONST_MESSAGE
     global CONST_TOKENFILE
+    log("Creating WO...")
     try:
         tokenfile = CONST_TOKENFILE
         endpoint = apibase + CONST_API + CONST_CREATEWO
@@ -178,12 +208,15 @@ def create(tokendir, apibase, data):
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
             hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
-            response = requests.post(endpoint, data=str(data), headers=hdrs, params=q)
-            if response.status_code == 201:
+            response = requests.post(endpoint, data=str(data), headers=hdrs, params=q, timeout=300)
+            if response.status_code <= 204:
+                log("WO Created (wiod: "+json.loads(response.text)["values"]["WorkOrder_ID"]+")")
                 return response
             else:
+                log("Could not create WO (status_code: "+str(response.status_code)+")")
                 return response
     except Exception as e:
+        log("WO Create ERROR: "+str(e))
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
@@ -198,7 +231,7 @@ def getentryid(tokendir, apibase, woid):
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
             hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
-            response = requests.get(endpoint, params=q, headers=hdrs)
+            response = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             if response.status_code == 200:
                 return response
             else:
@@ -211,6 +244,7 @@ def getentryid(tokendir, apibase, woid):
 
 def modify(tokendir, apibase, woid, data):
     global CONST_MESSAGE
+    log("Modifying WO (woid: "+woid+") with status '"+data["values"]["Status"]+"'")
     try:
         tokenfile = CONST_TOKENFILE
         entryidresponse = getentryid(tokendir, apibase, woid)
@@ -223,10 +257,13 @@ def modify(tokendir, apibase, woid, data):
             hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             response = requests.put(endpoint, json=data, headers=hdrs)
             if response.status_code == 204:
+                log("WO modified successfully (woid: "+woid+")")
                 return response
             else:
+                log("Could not modify WO (woid: "+woid+")")
                 return response
     except Exception as e:
+        log("WO modify error: "+str(e))
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
@@ -234,6 +271,7 @@ def modify(tokendir, apibase, woid, data):
 
 def addattachment(tokendir, apibase, woid, data, filename):
     global CONST_MESSAGE
+    log("Adding attachment (woid: "+woid+")")
     try:
         head, tail = os.path.split(filename)
         entryidresponse = getentryid(tokendir, apibase, woid)
@@ -276,24 +314,33 @@ def addattachment(tokendir, apibase, woid, data, filename):
             }
             conn.request("POST",  CONST_API + CONST_ATTACHMENT, payload, headers)
             res = conn.getresponse()
+            log("File attached successfully (woid: "+woid+")")
             return res
     except Exception as e:
+        log("File attachment error: "+str(e))
         CONST_MESSAGE += str(e)
         return 400
 
 
 def run_module():
     global CONST_TOKENFILE
+    global CONST_MESSAGE
+    global LOG_HANDLER
+    global LOG
+    global LOG_ID
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
         token_dir=dict(type='str', required=True),
         user=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=False),
+        password=dict(type='str', required=True, no_log=True),
         apibase=dict(type='str', required=True),
         action=dict(type='str', choices=['create', 'modify', 'add_attachment'], required=True),
         data=dict(type='dict', required=True),
         woid=dict(type='str', required=False),
-        filename=dict(type='str', required=False)
+        filename=dict(type='str', required=False),
+        logfile=dict(type="str", required=False, default="None"),
+        log=dict(type="bool", required=False, default=False),
+        log_identifier=dict(type="str", required=False, default=""),
     )
 
     # seed the result dict in the object
@@ -321,7 +368,6 @@ def run_module():
     # state with no modifications
     if module.check_mode:
         module.exit_json(**result)
-
     fname = module.params["token_dir"] + "/token_"+module.params['user']+".txt"
     if not os.path.exists(fname):
         with open(fname, 'a') as f:
@@ -329,6 +375,25 @@ def run_module():
             f.close()
         refreshtoken(module.params["token_dir"], module.params["apibase"], module.params["user"], module.params["password"])
     CONST_TOKENFILE = fname
+    if module.params["log"]:
+        if module.params["logfile"] == "None":
+          CONST_MESSAGE += "Logging file not specified. Logging NOT enabled"
+          LOG=False
+        else:
+            try:
+                LOG_HANDLER = getLogger(__name__)
+                # Use an absolute path to prevent file rotation trouble.
+                logfile = os.path.abspath(module.params["logfile"])
+                # Rotate log after reaching 100M, keep 5 old copies.
+                rotateHandler = ConcurrentRotatingFileHandler(logfile, "a", 100*1024*1024, 3)
+                LOG_HANDLER.addHandler(rotateHandler)
+                LOG_HANDLER.setLevel(INFO)
+                LOG = True
+                LOG_ID = module.params["log_identifier"]
+            except Exception as e:
+                CONST_MESSAGE += "Could not create logfile. Logging NOT enabled: "+str(e)
+                LOG = False
+    
 
 
     # manipulate or modify the state as
@@ -336,7 +401,6 @@ def run_module():
     # part where your module will do what it needs to do)
     result['original_message'] = module.params['action']
     #module.params["data"] = str(module.params["data"].encode("ascii","replace"))
-    global CONST_MESSAGE
     # use whatever logic you need to determine whether or not this module
     # made any modifications to your target
     if module.params['action'] == 'create':
@@ -344,7 +408,7 @@ def run_module():
             try:
                 response = create(module.params["token_dir"], module.params["apibase"], module.params["data"])
                 result['message'] = response.text
-                if response.status_code == 201:
+                if response.status_code <= 204:
                     result["message"] = json.loads(response.text)["values"]["WorkOrder_ID"]
                     result['changed'] = True
                     break
