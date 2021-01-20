@@ -146,8 +146,8 @@ def insertData(config,data):
     if "port" not in config.keys() or not config["port"].strip():
       config["port"] = 5432
     if config["method"] == "ssh":
-      query = "insert into indicadores (time,botname,client,area,platform,creator,type,function,specialist,exectype,manexecs,autoexecs,mantime,autotime,svtimebyexec,totalsvtime,svtime,opttime,optpct,svftes,optftes,ftebyexec,transactionid,ticketid) values "
-      values = "('"+time+"','"+data["bot_name"]+"','"+data["client"]+"','"+data["area"]+"','"+data["platform"]+"','"+data["creator"]+"','"+data["type"]+"','"+data["function"]+"','"+data["specialist"]+"','"+data["exec_type"]+"',"+data["manual_execs"]+","+data["auto_execs"]+","+data["manual_time"]+","+str(autotime)+","+str(svtimebyexec)+","+str(totalsvtime)+","+str(svtime)+","+str(opttime)+","+str(optpct)+","+str(svftes)+","+str(optftes)+","+str(ftebyexec)+",'"+transactionid+"','"+data["woid"]+"')"
+      query = "insert into indicadores (time,botname,client,area,platform,creator,type,function,specialist,exectype,manexecs,autoexecs,mantime,autotime,svtimebyexec,totalsvtime,svtime,opttime,optpct,svftes,optftes,ftebyexec,transactionid,ticketid,ci,technology) values "
+      values = "('"+time+"','"+data["bot_name"]+"','"+data["client"]+"','"+data["area"]+"','"+data["platform"]+"','"+data["creator"]+"','"+data["type"]+"','"+data["function"]+"','"+data["specialist"]+"','"+data["exec_type"]+"',"+data["manual_execs"]+","+data["auto_execs"]+","+data["manual_time"]+","+str(autotime)+","+str(svtimebyexec)+","+str(totalsvtime)+","+str(svtime)+","+str(opttime)+","+str(optpct)+","+str(svftes)+","+str(optftes)+","+str(ftebyexec)+",'"+transactionid+"','"+data["woid"]+"','"+data["ci"]+"','"+data["technology"]+"');"
       completequery = query+values
       completecommand = "PGPASSWORD=\""+config["db_password"]+"\" psql -h "+config["db_server"]+" -U "+config["db_user"]+" -d "+config["db_name"]+" -p "+config["db_port"]+" -c \""+completequery+"\""
       p = paramiko.SSHClient()
@@ -178,7 +178,7 @@ GLOBAL_MESSAGE = ""
 GLOBAL_ERRORS = 0
 CONST_REQUIRED = ["bot_name", "area", "manual_time", "playbook_start_timestamp"]
 CONST_DEFAULTS = {
-    "transaction_identifier" : "XXX",
+    "transaction_identifier" : "###",
     "client" : "MULTICLIENTE",
     "platform" : "AWX",
     "creator" : "AUTOMATIZACION",
@@ -188,7 +188,9 @@ CONST_DEFAULTS = {
     "exec_type" : "SOBRE DEMANDA",
     "manual_execs" : "1",
     "auto_execs" : "1",
-    "woid" : "0"
+    "woid" : "0",
+    "ci": "UNKNOWN",
+    "technology": "UNKNOWN"
   }
 
 def run_module():
