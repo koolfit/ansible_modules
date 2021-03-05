@@ -138,8 +138,8 @@ def insertData(config,data):
     svtime = svtimebyexec * float(data["manual_execs"])
     opttime = totalsvtime - svtime
     optpct = opttime/svtime
-    svftes = totalsvtime/1120
-    optftes = opttime/1120
+    svftes = totalsvtime/150
+    optftes = opttime/150
     ftebyexec = svtimebyexec/160
     transactionid = data["transaction_identifier"]+"."+now.strftime("%Y%m%d.%H%M%S.%f")
     #print("Variables calculated")
@@ -147,7 +147,7 @@ def insertData(config,data):
       config["port"] = 5432
     if config["method"] == "ssh":
       query = "insert into indicadores (time,botname,client,area,platform,creator,type,function,specialist,exectype,manexecs,autoexecs,mantime,autotime,svtimebyexec,totalsvtime,svtime,opttime,optpct,svftes,optftes,ftebyexec,transactionid,ticketid,ci,technology) values "
-      values = "('"+time+"','"+data["bot_name"]+"','"+data["client"]+"','"+data["area"]+"','"+data["platform"]+"','"+data["creator"]+"','"+data["type"]+"','"+data["function"]+"','"+data["specialist"]+"','"+data["exec_type"]+"',"+data["manual_execs"]+","+data["auto_execs"]+","+data["manual_time"]+","+str(autotime)+","+str(svtimebyexec)+","+str(totalsvtime)+","+str(svtime)+","+str(opttime)+","+str(optpct)+","+str(svftes)+","+str(optftes)+","+str(ftebyexec)+",'"+transactionid+"','"+data["woid"]+"','"+data["ci"]+"','"+data["technology"]+"');"
+      values = "('"+time+"','"+data["bot_name"]+"','"+data["client"]+"','"+data["area"]+"','"+data["platform"]+"','"+data["creator"]+"','"+data["type"]+"','"+data["function"]+"','"+data["specialist"]+"','"+data["exec_type"]+"',"+data["manual_execs"]+","+data["auto_execs"]+","+data["manual_time"]+","+str(autotime)+","+str(svtimebyexec)+","+str(totalsvtime)+","+str(svtime)+","+str(opttime)+","+str(optpct)+","+str(svftes)+","+str(optftes)+","+str(ftebyexec)+",'"+transactionid+"','"+data["woid"]+"','"+data["ci"]+"','"+data["technology"]+"')"
       completequery = query+values
       completecommand = "PGPASSWORD=\""+config["db_password"]+"\" psql -h "+config["db_server"]+" -U "+config["db_user"]+" -d "+config["db_name"]+" -p "+config["db_port"]+" -c \""+completequery+"\""
       p = paramiko.SSHClient()
@@ -164,8 +164,8 @@ def insertData(config,data):
     elif config["method"] == "postgres":
       conn = psycopg2.connect(dbname=config["db_name"], user=config["db_user"], password=config["db_password"], host=config["db_server"],port=config["db_port"])
       cursor = conn.cursor()
-      query = "insert into indicadores (time,botname,client,area,platform,creator,type,function,specialist,exectype,manexecs,autoexecs,mantime,autotime,svtimebyexec,totalsvtime,svtime,opttime,optpct,svftes,optftes,ftebyexec,transactionid,ticketid) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-      values = [time,data["bot_name"],data["client"],data["area"],data["platform"],data["creator"],data["type"],data["function"],data["specialist"],data["exec_type"],float(data["manual_execs"]),float(data["auto_execs"]),float(data["manual_time"]),float(autotime),float(svtimebyexec),float(totalsvtime),float(svtime),float(opttime),float(optpct),float(svftes),float(optftes),float(ftebyexec),transactionid,data["woid"]]
+      query = "insert into indicadores (time,botname,client,area,platform,creator,type,function,specialist,exectype,manexecs,autoexecs,mantime,autotime,svtimebyexec,totalsvtime,svtime,opttime,optpct,svftes,optftes,ftebyexec,transactionid,ticketid,ci,technology) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+      values = [time,data["bot_name"],data["client"],data["area"],data["platform"],data["creator"],data["type"],data["function"],data["specialist"],data["exec_type"],float(data["manual_execs"]),float(data["auto_execs"]),float(data["manual_time"]),float(autotime),float(svtimebyexec),float(totalsvtime),float(svtime),float(opttime),float(optpct),float(svftes),float(optftes),float(ftebyexec),transactionid,data["woid"],data["ci"],data["technology"]]
       cursor.execute(query,values)
   except Exception as e:
     GLOBAL_MESSAGE += str(e)
@@ -178,7 +178,7 @@ GLOBAL_MESSAGE = ""
 GLOBAL_ERRORS = 0
 CONST_REQUIRED = ["bot_name", "area", "manual_time", "playbook_start_timestamp"]
 CONST_DEFAULTS = {
-    "transaction_identifier" : "###",
+    "transaction_identifier" : "XXX",
     "client" : "MULTICLIENTE",
     "platform" : "AWX",
     "creator" : "AUTOMATIZACION",
@@ -189,8 +189,8 @@ CONST_DEFAULTS = {
     "manual_execs" : "1",
     "auto_execs" : "1",
     "woid" : "0",
-    "ci": "UNKNOWN",
-    "technology": "UNKNOWN"
+    "ci": "OTROS",
+    "technology": "OTROS"
   }
 
 def run_module():
