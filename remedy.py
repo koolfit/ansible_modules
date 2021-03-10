@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 # Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -204,7 +205,7 @@ def create(tokendir, apibase, data):
         tokenfile = CONST_TOKENFILE
         endpoint = apibase + CONST_API + CONST_CREATEWO
         q = {'fields': 'values(WorkOrder_ID)'}
-        data=json.dumps(data).replace('\\', '')
+        data=json.dumps(data);
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
             hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
@@ -229,8 +230,8 @@ def getentryid(tokendir, apibase, woid):
         endpoint = apibase + CONST_API + CONST_MODIFY
         q = {'q': "'Work Order ID'"+"="+'"'+woid+'"'}
         with open(tokenfile, 'r') as file:
-            tokendata = file.read().replace('\n', '')
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            tokendata = file.read().replace('\n', '').encode('utf-8')
+            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json;charset=UTF-8'}
             response = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             if response.status_code == 200:
                 return response
