@@ -134,6 +134,8 @@ def insertData(config,data):
     #data["playbook_start_timestamp"] = int(endtime)//1 - random.randint(1,600)
     autotime =  (int(endtime)//1 - int(data["playbook_start_timestamp"])//1)/3600
     svtimebyexec = float(data["manual_time"]) - autotime
+    if (svtimebyexec < 0):
+	  raise Exception("Exception: Calculated saved time value is a negative number")
     totalsvtime = svtimebyexec * float(data["auto_execs"])
     svtime = svtimebyexec * float(data["manual_execs"])
     opttime = totalsvtime - svtime
