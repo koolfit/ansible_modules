@@ -1,7 +1,5 @@
 #!/usr/bin/python
 
-# Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import (absolute_import, division, print_function)
 from ansible.module_utils.basic import AnsibleModule
 from dateutil.parser import parse
@@ -10,10 +8,6 @@ import psycopg2
 import time
 import random
 import paramiko
-
-# These two lines enable debugging at httplib level (requests->urllib3->http.client)
-# You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
-# The only thing missing will be the response.body which is not logged.
 
 __metaclass__ = type
 
@@ -28,24 +22,6 @@ version_added: "1.0.0"
 
 description: This module creates a Work Order in the Remedy ITSM using BMC's REST API
 
-options:
-    name:
-        description: This is the message to send to the test module.
-        required: true
-        type: str
-    new:
-        description:
-            - Control to demo if the result of this module is changed or not.
-            - Parameter description can be a list as well.
-        required: false
-        type: bool
-# Specify this value according to your collection
-# in format of namespace.collection.doc_fragment_name
-extends_documentation_fragment:
-    - my_namespace.my_collection.my_doc_fragment_name
-
-author:
-    - Your Name (@yourGitHubHandle)
 '''
 
 EXAMPLES = r'''
