@@ -1,8 +1,27 @@
 #!/usr/bin/python
+#
+#------------------------------- HOW TO USE
+# Este play esta diseñado para crear una Work Order en Remedy por medio de su API
+# y enviar estadisticas de uso de las automatizaciones a Grafana.
+#
+#------------------------------- REQUERIMIENTOS
+#
+#
+#
+#------------------------------- ENTRADAS
+#
+#
+#
+#------------------------------- EJEMPLO DE USO
+#
+#
+#
+#------------------------------- MAIN
 
 # Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import (absolute_import, division, print_function)
+from email.policy import default
 from ansible.module_utils.basic import AnsibleModule
 import filelock
 import requests
@@ -19,6 +38,7 @@ import logging
 from logging import getLogger, INFO
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 from datetime import datetime
+import traceback
 
 # These two lines enable debugging at httplib level (requests->urllib3->http.client)
 # You will see the REQUEST, including HEADERS and DATA, and RESPONSE with HEADERS but without DATA.
@@ -92,14 +112,19 @@ message:
 
 # Module constants definitionwrite to syslog
 CONST_NUMRETRIES = 3
-CONST_TOKENFILE=""
+CONST_TOKENFILE = ''
 CONST_LOGIN = '/api/jwt/login'
 CONST_API = '/api/arsys/v1/entry'
 CONST_LOGOUT = '/api/jwt/logout'
 CONST_CREATEWO = '/WOI:WorkOrderInterface_Create'
 CONST_MODIFY = '/WOI:WorkOrder'
 CONST_ATTACHMENT = '/WOI:WorkInfo'
-CONST_MESSAGE = ""
+CONST_TABLA_PRODUCTO_COMPANIA = '/PCT:ProductCompanyAssocLookup'
+CONST_TABLA_OPERACIONES_COMPANIA = '/CFG:Service Catalog LookUp'
+CONST_TABLA_COMPANIA_SUPPORT_GRUPS = '/CTM:Support Group'
+CONST_TABLA_ASIGNACION = '/KIO:CFG:Assignment'
+CONST_TABLA_USUARIOS= '/CTM:People'
+CONST_MESSAGE = ''
 LOG = False
 LOG_HANDLER = None
 LOG_ID = None
@@ -161,7 +186,6 @@ def login(tokendir, apibase, user, password):
         response.status_code = 400
         return response
 
-
 def refreshtoken(tokendir, apibase, user, password):
     global CONST_MESSAGE
     log("Found invalid token. Refreshing...")
@@ -195,7 +219,6 @@ def refreshtoken(tokendir, apibase, user, password):
         lock.release(force=True)
         os.remove(lockfile)
 
-
 def create(tokendir, apibase, data):
     global CONST_MESSAGE
     global CONST_TOKENFILE
@@ -221,7 +244,6 @@ def create(tokendir, apibase, data):
         response.status_code = 400
         return response
 
-
 def getentryid(tokendir, apibase, woid):
     global CONST_MESSAGE
     try:
@@ -241,6 +263,148 @@ def getentryid(tokendir, apibase, woid):
         response.status_code = 400
         return response
 
+def get_generic_user(apibase, company):
+    global CONST_MESSAGE
+    tokenfile = CONST_TOKENFILE
+    try:
+        with open(tokenfile, 'r') as file:
+            tokendata = file.read().replace('\n', '')
+
+            endpoint = apibase + CONST_API + CONST_TABLA_USUARIOS
+            q = {'q': "'Company'"+"="+'"'+company+'"'}
+            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            response_users = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
+            
+            if response_users.status_code >= 400:
+                return response_users
+            
+
+            users = json.loads(response_users.text)["entries"]
+            usuario_completo = list(filter(lambda usuario: usuario if 'USUARIO' in usuario['values']['Full Name'] else None, users))[0]
+
+            usuario = {
+                        'Person ID':   usuario_completo['values']['Person ID'],
+                        'Full Name':   usuario_completo['values']['Full Name'],
+                        'First Name':  usuario_completo['values']['First Name'],
+                        'Last Name':   usuario_completo['values']['Last Name'],
+                        'status_code': 200
+                        }
+            return usuario
+
+    except Exception as e:
+        log("Get Categories error: "+str(e))
+        CONST_MESSAGE += str(e)
+        response_users.status_code = 400
+        return response_users
+
+def get_support_group_name(apibase, suport_group_id):
+    global CONST_MESSAGE
+    tokenfile = CONST_TOKENFILE
+    try:
+        with open(tokenfile, 'r') as file:
+            tokendata = file.read().replace('\n', '')
+
+            endpoint = apibase + CONST_API + CONST_TABLA_COMPANIA_SUPPORT_GRUPS
+            q = {'q': "'Support Group ID'"+"="+'"'+suport_group_id+'"'}
+            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            response_support_group = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
+            
+            if response_support_group.status_code >= 400:
+                return response_support_group
+            
+
+            support_group_completo = json.loads(response_support_group.text)["entries"][0]
+            
+
+            support_group = {
+                        'Support Organization':   support_group_completo['values']['Support Organization'],
+                        'Support Group Name':   support_group_completo['values']['Support Group Name'],
+                        'status_code': 200
+                        }
+            return support_group
+
+    except Exception as e:
+        log("Get Categories error: "+str(e))
+        CONST_MESSAGE += str(e)
+        response_support_group.status_code = 400
+        return response_support_group
+
+def get_categories(apibase, company, technology, defautl_technology):
+    global CONST_MESSAGE
+    tokenfile = CONST_TOKENFILE
+
+    def extract_values(assigment):
+        filtered_assigments = {
+                            'Submitter':                assigment['values']['Submitter'],
+                            'chr_EmpresaResolutora__c': assigment['values']['chr_EmpresaResolutora__c'],
+                            'Support Organization__c':  assigment['values']['Support Organization__c'],
+                            'Categorization Tier 1__c': assigment['values']['Categorization Tier 1__c'],
+                            'Categorization Tier 2__c': assigment['values']['Categorization Tier 2__c'],
+                            'Categorization Tier 3__c': assigment['values']['Categorization Tier 3__c'],
+                            'Support Group ID__c':      assigment['values']['Support Group ID__c'],
+                            'Assigned Group__c':        assigment['values']['Assigned Group__c'],
+                            'Support Company__c':       assigment['values']['Support Company__c']
+                            }
+        return filtered_assigments
+
+    try:
+        with open(tokenfile, 'r') as file:
+            tokendata = file.read().replace('\n', '')
+
+            endpoint = apibase + CONST_API + CONST_TABLA_ASIGNACION
+            q = {'q': "'Contact Company__c'"+"="+'"'+company+'"'}
+            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            response_assignments = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
+            
+            if response_assignments.status_code >= 400:
+                return response_assignments
+
+            #Obteniendo usuario generico
+            usuario = get_generic_user(apibase, company)
+
+            if usuario['status_code'] != 200 or ( type(usuario) is not dict and usuario.status_code >= 400):
+                return usuario
+
+            #Revisando Asignaciones
+            assignments = json.loads(response_assignments.text)["entries"]
+            assigments_ordered = {'default': [], 'other_values': []}
+
+            default = None
+            tec = None
+
+            for assigment_full in assignments:
+                
+                #Filtrando datos para asgnar WO
+                assigment = extract_values(assigment_full)
+
+                #Agregando datos del usuario
+                assigment['Person ID']  = usuario['Person ID']
+                assigment['Full Name']  = usuario['Full Name']
+                assigment['First Name'] = usuario['First Name']
+                assigment['Last Name']  = usuario['Last Name']
+
+                if technology in assigment['Categorization Tier 3__c']:
+                    tec = assigment
+
+                if defautl_technology in assigment['Categorization Tier 3__c']:
+                    default = assigment
+
+                assigments_ordered['other_values'].append(assigment)
+
+            if tec is None:
+                assigments_ordered['default'] = default
+            else:
+                assigments_ordered['default'] = tec
+
+            assigments_ordered['status_code'] = 200
+
+            return assigments_ordered
+
+    except Exception as e:
+        log("Get Categories error: "+str(e))
+        CONST_MESSAGE += str(e)
+        response_assignments.status_code = 400
+        return response_assignments
 
 def modify(tokendir, apibase, woid, data):
     global CONST_MESSAGE
@@ -267,7 +431,6 @@ def modify(tokendir, apibase, woid, data):
         CONST_MESSAGE += str(e)
         response.status_code = 400
         return response
-
 
 def addattachment(tokendir, apibase, woid, data, filename):
     global CONST_MESSAGE
@@ -321,7 +484,6 @@ def addattachment(tokendir, apibase, woid, data, filename):
         CONST_MESSAGE += str(e)
         return 400
 
-
 def run_module():
     global CONST_TOKENFILE
     global CONST_MESSAGE
@@ -334,7 +496,7 @@ def run_module():
         user=dict(type='str', required=True),
         password=dict(type='str', required=True, no_log=True),
         apibase=dict(type='str', required=True),
-        action=dict(type='str', choices=['create', 'modify', 'add_attachment'], required=True),
+        action=dict(type='str', choices=['create', 'modify', 'add_attachment', 'get_categories'], required=True),
         data=dict(type='dict', required=True),
         woid=dict(type='str', required=False),
         filename=dict(type='str', required=False),
@@ -394,8 +556,6 @@ def run_module():
                 CONST_MESSAGE += "Could not create logfile. Logging NOT enabled: "+str(e)
                 LOG = False
     
-
-
     # manipulate or modify the state as
     # needed (this is going to be the
     # part where your module will do what it needs to do)
@@ -459,9 +619,29 @@ def run_module():
         else:
             module.exit_json(**result)
 
+    elif module.params['action'] == 'get_categories':
+        for i in range(CONST_NUMRETRIES):
+            try:
+                response = get_categories(module.params["apibase"], module.params["data"]["company"], module.params["data"]["technology"], module.params["data"]["defautl_technology"])
+                if type(response) is dict and response['status_code'] == 200:
+                    result['changed'] = True
+                    result['assignments'] = response
+                    #result['message'] = response.text
+                    break
+                elif (type(response) is not dict and response.status_code >= 400) or (type(response) is dict and response['status_code'] >= 400):
+                    result['message'] = response.text
+                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+            except Exception as e:
+                result['module_traceback'] = traceback.format_exc() 
+                result['message'] = str(e)
+        if not result['changed']:
+            result['message'] += CONST_MESSAGE
+            module.fail_json(msg='ERROR: Could not Get Categories', **result)
+        else:
+            module.exit_json(**result)
+
 def main():
     run_module()
-
 
 if __name__ == '__main__':
     main()
