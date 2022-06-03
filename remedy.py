@@ -139,36 +139,35 @@ def log(message):
     except Exception as e:
         pass
 
-def logout(tokendir, apibase):
-  try:
-      tokenfile = CONST_TOKENFILE
-      endpoint = apibase + CONST_LOGOUT
-      log("Invalidating old token...")
-      with open(tokenfile, 'r') as file:
-          tokendata = file.read().replace('\n', '')
-          file.close()
-          hdrs = {'Authorization': 'AR-JWT ' + tokendata}
-          response = requests.post(endpoint, headers=hdrs)
-          log("Old token invalidated (status code: "+str(response.status_code)+")")
-          return response
-  except Exception as e:
-      log("ERROR: "+str(e))
-      response.status_code = 400
-      return response
+def logout(apibase, hdrs):
+    try:
+        tokenfile = CONST_TOKENFILE
+        endpoint = apibase + CONST_LOGOUT
+        log("Invalidating old token...")
+        with open(tokenfile, 'r') as file:
+            tokendata = file.read().replace('\n', '')
+            file.close()
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata}
+            hdrs = dict(hdr_token, **hdrs)
+            response = requests.post(endpoint, headers=hdrs)
+            log("Old token invalidated (status code: "+str(response.status_code)+")")
+            return response
+    except Exception as e:
+        log("ERROR: "+str(e))
+        response.status_code = 400
+        return response
 
-def login(tokendir, apibase, user, password):
+def login(apibase, user, password, hdrs):
     global CONST_MESSAGE
     log("Logging in (user: '"+user+"', url: '"+apibase+"'")
     try:
         tokenfile = CONST_TOKENFILE
-        #q = {'username': user, 'password': password}
         q = [('username', user), ('password', password)]
         data = {}
-        endpoint = apibase + CONST_LOGIN #+ "?username=" + user + "&password=" + password
-        hdrs = {'Content-Type': 'application/x-www-form-urlencoded'}
-        #response = requests.post(endpoint, data=data, params=q, headers=hdrs)
+        endpoint = apibase + CONST_LOGIN
+        hdr_token = {'Content-Type': 'application/x-www-form-urlencoded'}
+        hdrs = dict(hdr_token, **hdrs)
         response = requests.request("POST", endpoint, params=q, headers=hdrs, data=data)
-        #response = requests.post(endpoint, data=data, headers=hdrs)
         if response.status_code == 200:
             log("Logged in successfully")
             tokendata = response.text
@@ -186,7 +185,7 @@ def login(tokendir, apibase, user, password):
         response.status_code = 400
         return response
 
-def refreshtoken(tokendir, apibase, user, password):
+def refreshtoken(tokendir, apibase, user, password, hdrs):
     global CONST_MESSAGE
     log("Found invalid token. Refreshing...")
     lockfile = tokendir+"/token_refresh_"+user+".lock"
@@ -199,10 +198,10 @@ def refreshtoken(tokendir, apibase, user, password):
         open(lockfile, 'a+').close()
         lock = filelock.FileLock(lockfile, timeout=3)
         try:
-          logout(tokendir, apibase)
+          logout(apibase, hdrs)
         except Exception:
           pass
-        response = login(tokendir, apibase, user, password)
+        response = login(apibase, user, password, hdrs)
         if response.status_code == 200:
             return True
         else:
@@ -219,9 +218,16 @@ def refreshtoken(tokendir, apibase, user, password):
         lock.release(force=True)
         os.remove(lockfile)
 
-def create(tokendir, apibase, data):
+def create(apibase, data, hdrs):
     global CONST_MESSAGE
     global CONST_TOKENFILE
+
+    # log("Validating minimal data...")
+    # try:
+    #     pass
+    # except Exception as e:
+    #     pass
+
     log("Creating WO...")
     try:
         tokenfile = CONST_TOKENFILE
@@ -230,7 +236,8 @@ def create(tokendir, apibase, data):
         data=json.dumps(data)
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
             response = requests.post(endpoint, data=str(data), headers=hdrs, params=q, timeout=300)
             if response.status_code <= 204:
                 log("WO Created (wiod: "+json.loads(response.text)["values"]["WorkOrder_ID"]+")")
@@ -244,7 +251,7 @@ def create(tokendir, apibase, data):
         response.status_code = 400
         return response
 
-def getentryid(tokendir, apibase, woid):
+def getentryid(apibase, woid, hdrs):
     global CONST_MESSAGE
     try:
         tokenfile = CONST_TOKENFILE
@@ -252,7 +259,8 @@ def getentryid(tokendir, apibase, woid):
         q = {'q': "'Work Order ID'"+"="+'"'+woid+'"'}
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
             response = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             if response.status_code == 200:
                 return response
@@ -263,7 +271,7 @@ def getentryid(tokendir, apibase, woid):
         response.status_code = 400
         return response
 
-def get_generic_user(apibase, company):
+def get_generic_user(apibase, company, hdrs):
     global CONST_MESSAGE
     tokenfile = CONST_TOKENFILE
     try:
@@ -272,9 +280,10 @@ def get_generic_user(apibase, company):
 
             endpoint = apibase + CONST_API + CONST_TABLA_USUARIOS
             q = {'q': "'Company'"+"="+'"'+company+'"'}
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
+
             response_users = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
-            
             if response_users.status_code >= 400:
                 return response_users
             
@@ -297,7 +306,7 @@ def get_generic_user(apibase, company):
         response_users.status_code = 400
         return response_users
 
-def get_support_group_name(apibase, suport_group_id):
+def get_support_group_name(apibase, suport_group_id, hdrs):
     global CONST_MESSAGE
     tokenfile = CONST_TOKENFILE
     try:
@@ -306,7 +315,8 @@ def get_support_group_name(apibase, suport_group_id):
 
             endpoint = apibase + CONST_API + CONST_TABLA_COMPANIA_SUPPORT_GRUPS
             q = {'q': "'Support Group ID'"+"="+'"'+suport_group_id+'"'}
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
             response_support_group = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             
             if response_support_group.status_code >= 400:
@@ -329,7 +339,9 @@ def get_support_group_name(apibase, suport_group_id):
         response_support_group.status_code = 400
         return response_support_group
 
-def get_categories(apibase, company, technology, defautl_technology):
+#para recibir el grupo no la tecnologia
+#def get_categories(apibase, company, assigned_group, defautl_technology):
+def get_categories(apibase, company, technology, defautl_technology, hdrs):
     global CONST_MESSAGE
     tokenfile = CONST_TOKENFILE
 
@@ -353,7 +365,8 @@ def get_categories(apibase, company, technology, defautl_technology):
 
             endpoint = apibase + CONST_API + CONST_TABLA_ASIGNACION
             q = {'q': "'Contact Company__c'"+"="+'"'+company+'"'}
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
             response_assignments = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             
             if response_assignments.status_code >= 400:
@@ -383,6 +396,8 @@ def get_categories(apibase, company, technology, defautl_technology):
                 assigment['First Name'] = usuario['First Name']
                 assigment['Last Name']  = usuario['Last Name']
 
+                #para recibir el grupo no la tecnologia
+                #if assigned_group in assigment['Assigned Group__c']:
                 if technology in assigment['Categorization Tier 3__c']:
                     tec = assigment
 
@@ -406,19 +421,20 @@ def get_categories(apibase, company, technology, defautl_technology):
         response_assignments.status_code = 400
         return response_assignments
 
-def modify(tokendir, apibase, woid, data):
+def modify(apibase, woid, data, hdrs):
     global CONST_MESSAGE
     log("Modifying WO (woid: "+woid+") with status '"+data["values"]["Status"]+"'")
     try:
         tokenfile = CONST_TOKENFILE
-        entryidresponse = getentryid(tokendir, apibase, woid)
+        entryidresponse = getentryid(apibase, woid, hdrs)
         if entryidresponse.status_code == 400:
             return entryidresponse
         entryid = json.loads(entryidresponse.text)["entries"][0]["values"]["Request ID"]
         endpoint = apibase + CONST_API + CONST_MODIFY + "/" + entryid
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdrs = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            hdrs = dict(hdr_token, **hdrs)
             response = requests.put(endpoint, json=data, headers=hdrs)
             if response.status_code == 204:
                 log("WO modified successfully (woid: "+woid+")")
@@ -432,12 +448,12 @@ def modify(tokendir, apibase, woid, data):
         response.status_code = 400
         return response
 
-def addattachment(tokendir, apibase, woid, data, filename):
+def addattachment(apibase, woid, data, filename, hdrs):
     global CONST_MESSAGE
     log("Adding attachment (woid: "+woid+")")
     try:
         head, tail = os.path.split(filename)
-        entryidresponse = getentryid(tokendir, apibase, woid)
+        entryidresponse = getentryid(apibase, woid, hdrs)
         if entryidresponse.status_code == 400:
             return entryidresponse
         entryid = json.loads(entryidresponse.text)["entries"][0]["values"]["Request ID"]
@@ -470,12 +486,14 @@ def addattachment(tokendir, apibase, woid, data, filename):
             dataList.append(b'')
             body = b'\r\n'.join(dataList)
             payload = body
-            headers = {
+            hdr_token = {
                 b'Authorization': b'AR-JWT ' + tokendata.encode(),
                 b'Accept-Encoding': b'gzip, deflate, br',
                 b'Content-type': b'multipart/form-data; boundary=' + boundary
             }
-            conn.request("POST",  CONST_API + CONST_ATTACHMENT, payload, headers)
+            hdr_token = {b'Accept-Encoding': b'gzip, deflate, br', b'Content-type': b'multipart/form-data; boundary='}
+            hdrs = dict(hdr_token, **hdrs)
+            conn.request("POST",  CONST_API + CONST_ATTACHMENT, payload, hdrs)
             res = conn.getresponse()
             log("File attached successfully (woid: "+woid+")")
             return res
@@ -498,6 +516,7 @@ def run_module():
         apibase=dict(type='str', required=True),
         action=dict(type='str', choices=['create', 'modify', 'add_attachment', 'get_categories'], required=True),
         data=dict(type='dict', required=True),
+        headers=dict(type='dict', required=False, default={}),
         woid=dict(type='str', required=False),
         filename=dict(type='str', required=False),
         logfile=dict(type="str", required=False, default="None"),
@@ -530,12 +549,12 @@ def run_module():
     # state with no modifications
     if module.check_mode:
         module.exit_json(**result)
-    fname = module.params["token_dir"] + "/token_"+module.params['user']+".txt"
+    fname = module.params['token_dir'] + "/token_"+module.params['user']+".txt"
     if not os.path.exists(fname):
         with open(fname, 'a') as f:
             f.write("")
             f.close()
-        refreshtoken(module.params["token_dir"], module.params["apibase"], module.params["user"], module.params["password"])
+        refreshtoken(module.params['token_dir'], module.params["apibase"], module.params["user"], module.params["password"], module.params["headers"])
     CONST_TOKENFILE = fname
     if module.params["log"]:
         if module.params["logfile"] == "None":
@@ -566,14 +585,14 @@ def run_module():
     if module.params['action'] == 'create':
         for i in range(CONST_NUMRETRIES):
             try:
-                response = create(module.params["token_dir"], module.params["apibase"], module.params["data"])
+                response = create(module.params["apibase"], module.params["data"], module.params["headers"])
                 result['message'] = response.text
                 if response.status_code <= 204:
                     result["message"] = json.loads(response.text)["values"]["WorkOrder_ID"]
                     result['changed'] = True
                     break
                 elif response.status_code >= 400:
-                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'], module.params["headers"])
             except Exception as e:
                 result['message']=str(e)
         if not result['changed']:
@@ -585,15 +604,15 @@ def run_module():
     elif module.params['action'] == 'add_attachment':
         for i in range(CONST_NUMRETRIES):
             try:
-                response = addattachment(module.params["token_dir"], module.params["apibase"], module.params["woid"], module.params["data"], module.params["filename"])
+                response = addattachment(module.params["apibase"], module.params["woid"], module.params["data"], module.params["filename"], module.params["headers"])
                 if response.status == 201:
                     result['changed'] = True
                     result['message'] = response.read()
                     break
                 elif response.status >= 400:
-                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'], module.params["headers"])
             except:
-                refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+                refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'], module.params["headers"])
         if not result['changed']:
             result['message'] += CONST_MESSAGE
             module.fail_json(msg='ERROR: Could not attach file to Work Order', **result)
@@ -603,14 +622,14 @@ def run_module():
     elif module.params['action'] == 'modify':
         for i in range(CONST_NUMRETRIES):
             try:
-                response = modify(module.params["token_dir"], module.params["apibase"], module.params["woid"], module.params["data"])
+                response = modify(module.params["apibase"], module.params["woid"], module.params["data"], module.params["headers"])
                 if response.status_code == 204:
                     result['changed'] = True
                     result['message'] = response.text
                     break
                 elif response.status_code >= 400:
                     result['message'] = response.text
-                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'], module.params["headers"])
             except Exception as e:
                 result['message'] = str(e)
         if not result['changed']:
@@ -622,7 +641,7 @@ def run_module():
     elif module.params['action'] == 'get_categories':
         for i in range(CONST_NUMRETRIES):
             try:
-                response = get_categories(module.params["apibase"], module.params["data"]["company"], module.params["data"]["technology"], module.params["data"]["defautl_technology"])
+                response = get_categories(module.params["apibase"], module.params["data"]["company"], module.params["data"]["technology"], module.params["data"]["defautl_technology"], module.params["headers"])
                 if type(response) is dict and response['status_code'] == 200:
                     result['changed'] = True
                     result['assignments'] = response
@@ -630,9 +649,9 @@ def run_module():
                     break
                 elif (type(response) is not dict and response.status_code >= 400) or (type(response) is dict and response['status_code'] >= 400):
                     result['message'] = response.text
-                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'])
+                    refreshtoken(module.params['token_dir'], module.params['apibase'], module.params['user'], module.params['password'], module.params["headers"])
             except Exception as e:
-                result['module_traceback'] = traceback.format_exc() 
+                result['module_traceback'] = traceback.format_exc()
                 result['message'] = str(e)
         if not result['changed']:
             result['message'] += CONST_MESSAGE
