@@ -147,7 +147,10 @@ def logout(apibase, hdrs):
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
             file.close()
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata}
             hdrs = dict(hdr_token, **hdrs)
             response = requests.post(endpoint, headers=hdrs)
             log("Old token invalidated (status code: "+str(response.status_code)+")")
@@ -236,7 +239,10 @@ def create(apibase, data, hdrs):
         data=json.dumps(data)
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
             response = requests.post(endpoint, data=str(data), headers=hdrs, params=q, timeout=300)
             if response.status_code <= 204:
@@ -259,7 +265,10 @@ def getentryid(apibase, woid, hdrs):
         q = {'q': "'Work Order ID'"+"="+'"'+woid+'"'}
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
             response = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             if response.status_code == 200:
@@ -280,7 +289,10 @@ def get_generic_user(apibase, company, hdrs):
 
             endpoint = apibase + CONST_API + CONST_TABLA_USUARIOS
             q = {'q': "'Company'"+"="+'"'+company+'"'}
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
 
             response_users = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
@@ -315,7 +327,10 @@ def get_support_group_name(apibase, suport_group_id, hdrs):
 
             endpoint = apibase + CONST_API + CONST_TABLA_COMPANIA_SUPPORT_GRUPS
             q = {'q': "'Support Group ID'"+"="+'"'+suport_group_id+'"'}
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
             response_support_group = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             
@@ -365,7 +380,10 @@ def get_categories(apibase, company, technology, defautl_technology, hdrs):
 
             endpoint = apibase + CONST_API + CONST_TABLA_ASIGNACION
             q = {'q': "'Contact Company__c'"+"="+'"'+company+'"'}
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
             response_assignments = requests.get(endpoint, params=q, headers=hdrs, timeout=180)
             
@@ -433,7 +451,10 @@ def modify(apibase, woid, data, hdrs):
         endpoint = apibase + CONST_API + CONST_MODIFY + "/" + entryid
         with open(tokenfile, 'r') as file:
             tokendata = file.read().replace('\n', '')
-            hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            if not "Authorization" in hdrs:
+                hdr_token = {'Authorization': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
+            else:
+                hdr_token = {'Authorization_h': 'AR-JWT ' + tokendata, 'Content-Type': 'application/json'}
             hdrs = dict(hdr_token, **hdrs)
             response = requests.put(endpoint, json=data, headers=hdrs)
             if response.status_code == 204:
@@ -486,11 +507,18 @@ def addattachment(apibase, woid, data, filename, hdrs):
             dataList.append(b'')
             body = b'\r\n'.join(dataList)
             payload = body
-            hdr_token = {
-                b'Authorization': b'AR-JWT ' + tokendata.encode(),
-                b'Accept-Encoding': b'gzip, deflate, br',
-                b'Content-type': b'multipart/form-data; boundary=' + boundary
-            }
+            if not "Authorization" in hdrs:
+                hdr_token = {
+                    b'Authorization': b'AR-JWT ' + tokendata.encode(),
+                    b'Accept-Encoding': b'gzip, deflate, br',
+                    b'Content-type': b'multipart/form-data; boundary=' + boundary
+                }
+            else:
+                hdr_token = {
+                    b'Authorization_h': b'AR-JWT ' + tokendata.encode(),
+                    b'Accept-Encoding': b'gzip, deflate, br',
+                    b'Content-type': b'multipart/form-data; boundary=' + boundary
+                }
             hdr_token = {b'Accept-Encoding': b'gzip, deflate, br', b'Content-type': b'multipart/form-data; boundary='}
             hdrs = dict(hdr_token, **hdrs)
             conn.request("POST",  CONST_API + CONST_ATTACHMENT, payload, hdrs)
