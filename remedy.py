@@ -130,14 +130,14 @@ LOG_HANDLER = None
 LOG_ID = None
 
 def log(message):
-  global LOG
-  global LOG_HANDLER
-  global LOG_ID
-  if LOG:
-    try:
-        LOG_HANDLER.info(LOG_ID+": "+str(datetime.now())+": "+message)
-    except Exception as e:
-        pass
+    global LOG
+    global LOG_HANDLER
+    global LOG_ID
+    if LOG:
+        try:
+            LOG_HANDLER.info(LOG_ID+": "+str(datetime.now())+": "+message)
+        except Exception as e:
+            pass
 
 def logout(apibase, hdrs):
     try:
@@ -530,12 +530,14 @@ def addattachment(apibase, woid, data, filename, hdrs):
         CONST_MESSAGE += str(e)
         return 400
 
-def run_module():
+def run_module(tt=False):
     global CONST_TOKENFILE
     global CONST_MESSAGE
     global LOG_HANDLER
     global LOG
     global LOG_ID
+    global tst
+    tst = tt
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
         token_dir=dict(type='str', required=True),
@@ -567,10 +569,16 @@ def run_module():
     # this includes instantiation, a couple of common attr would be the
     # args/params passed to the execution, as well as if the module
     # supports check mode
-    module = AnsibleModule(
-        argument_spec=module_args,
-        supports_check_mode=False
-    )
+    if not tst:
+        module = AnsibleModule(
+            argument_spec=module_args,
+            supports_check_mode=False
+        )
+    else:
+        module = AM_test(
+            argument_spec=module_args,
+            supports_check_mode=False
+        )
 
     # if the user is working with this module in only check mode we do not
     # want to make any changes to the environment, just return the current
@@ -578,12 +586,12 @@ def run_module():
     if module.check_mode:
         module.exit_json(**result)
     fname = module.params['token_dir'] + "/token_"+module.params['user']+".txt"
+    CONST_TOKENFILE = fname
     if not os.path.exists(fname):
         with open(fname, 'a') as f:
             f.write("")
             f.close()
         refreshtoken(module.params['token_dir'], module.params["apibase"], module.params["user"], module.params["password"], module.params["headers"])
-    CONST_TOKENFILE = fname
     if module.params["log"]:
         if module.params["logfile"] == "None":
           CONST_MESSAGE += "Logging file not specified. Logging NOT enabled"
@@ -692,3 +700,23 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+##### For testig propouses
+
+def test(vars):
+    #class module:
+    #    params={}
+    #    check_mode = False
+    global prms
+    
+    prms = vars
+
+    run_module(tt=True)
+class AM_test:
+    params={}
+    check_mode = False
+
+    def __init__(self, argument_spec, supports_check_mode):
+        self.argument_spec=argument_spec,
+        self.supports_check_mode=supports_check_mode
+        self.params = prms
